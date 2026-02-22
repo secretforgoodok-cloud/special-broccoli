@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NIGHTFALL – Stealth Battle Royale</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@400;600;700&display=swap');
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:#000;overflow:hidden;font-family:'Rajdhani',sans-serif;}
+  canvas{display:block;}
+  #ui{
+    position:absolute;top:0;left:0;width:100%;height:100%;
+    pointer-events:none;
+  }
+  #hud{
+    position:absolute;top:16px;left:16px;
+    display:flex;flex-direction:column;gap:8px;
+    color:#cce8ff;
+    text-shadow:0 0 8px rgba(100,200,255,0.8);
+  }
+  .hud-label{
+    font-size:10px;letter-spacing:3px;text-transform:uppercase;
+    color:#5599aa;font-family:'Share Tech Mono',monospace;
+  }
+  .bar-wrap{
+    width:200px;height:10px;background:rgba(0,30,50,0.8);
+    border:1px solid #1a4a66;border-radius:2px;overflow:hidden;
+    position:relative;
+  }
+  #hp-fill{height:100%;background:linear-gradient(90deg,#00ff88,#00cc66);width:100%;transition:width 0.15s;}
+  #noise-fill{height:100%;background:linear-gradient(90deg,#ff6600,#ffaa00);width:0%;transition:width 0.1s;}
+  #kill-fill{height:100%;background:linear-gradient(90deg,#0088ff,#00ccff);width:0%;transition:width 0.3s;}
+  .hud-val{
+    font-size:13px;font-weight:700;font-family:'Share Tech Mono',monospace;
+    color:#aaddff;margin-top:2px;
+  }
+  #status-text{
+    position:absolute;top:16px;right:16px;
+    font-family:'Share Tech Mono',monospace;
+    font-size:13px;color:#7ab;letter-spacing:2px;
+    text-shadow:0 0 6px rgba(100,200,255,0.5);
+    text-align:right;
+  }
+  #noise-warn{
+    position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+    font-size:18px;font-family:'Share Tech Mono',monospace;
+    color:#ff6600;letter-spacing:4px;
+    text-shadow:0 0 20px #ff6600;
+    opacity:0;transition:opacity 0.2s;
+    pointer-events:none;
+  }
+  #hide-hint{
+    position:absolute;bottom:80px;left:50%;transform:translateX(-50%);
+    font-family:'Share Tech Mono',monospace;font-size:12px;
+    color:#00ff88;letter-spacing:3px;
+    text-shadow:0 0 10px #00ff88;
+    opacity:0;transition:opacity 0.3s;
+  }
+  #overlay{
+    position:absolute;top:0;left:0;width:100%;height:100%;
+    background:rgba(0,0,0,0.85);
+    display:none;flex-direction:column;align-items:center;justify-content:center;
+    pointer-events:all;
+  }
+  #msg{
+    font-size:72px;font-weight:700;letter-spacing:8px;
+    font-family:'Rajdhani',sans-serif;
+    background:linear-gradient(135deg,#00ff88,#0088ff);
+    -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+    margin-bottom:12px;
+  }
+  #sub-msg{
+    font-family:'Share Tech Mono',monospace;
+    color:#557;font-size:14px;letter-spacing:4px;margin-bottom:40px;
+  }
+  #respawn-btn{
+    padding:14px 48px;font-size:18px;font-weight:700;font-family:'Rajdhani',sans-serif;
+    letter-spacing:4px;background:transparent;
+    border:2px solid #00ff88;color:#00ff88;cursor:pointer;
+    text-transform:uppercase;
+    box-shadow:0 0 20px rgba(0,255,136,0.3);
+    transition:all 0.2s;pointer-events:all;
+  }
+  #respawn-btn:hover{background:rgba(0,255,136,0.1);box-shadow:0 0 40px rgba(0,255,136,0.6);}
+  #controls{
+    position:absolute;bottom:16px;left:16px;
+    font-family:'Share Tech Mono',monospace;font-size:10px;
+    color:#334;letter-spacing:2px;line-height:1.8;
+  }
+  .key{color:#557;font-weight:bold;}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="ui">
+  <div id="hud">
+    <div>
+      <div class="hud-label">Health</div>
+      <div class="bar-wrap"><div id="hp-fill"></div></div>
+      <div class="hud-val" id="hp-num">100 / 100</div>
+    </div>
+    <div>
+      <div class="hud-label">Noise Level</div>
+      <div class="bar-wrap"><div id="noise-fill"></div></div>
+    </div>
+    <div>
+      <div class="hud-label">Kills <span style="color:#334">/ 10</span></div>
+      <div class="bar-wrap"><div id="kill-fill"></div></div>
+      <div class="hud-val" id="kill-num">0 KILLS</div>
+    </div>
+  </div>
+  <div id="status-text">
+    <div id="players-left">PLAYERS: 19</div>
+    <div id="zone-info" style="margin-top:4px;font-size:11px;color:#334;">ZONE CLOSING</div>
+  </div>
+  <div id="noise-warn">⚠ YOU ARE VISIBLE</div>
+  <div id="hide-hint">[ F ] HIDE / UNHIDE</div>
+  <div id="controls">
+    <div><span class="key">WASD</span> – MOVE</div>
+    <div><span class="key">MOUSE</span> – AIM</div>
+    <div><span class="key">CLICK</span> – SHOOT</div>
+    <div><span class="key">F</span> – HIDE IN OBJECT</div>
+    <div><span class="key">SHIFT</span> – WALK SLOWLY (SILENT)</div>
+  </div>
+</div>
+<div id="overlay">
+  <div id="msg">ELIMINATED</div>
+  <div id="sub-msg" id="sub">DARKNESS CLAIMS ANOTHER</div>
+  <button id="respawn-btn">DEPLOY AGAIN</button>
+</div>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+
+// UI refs
+const uiHpFill = document.getElementById('hp-fill');
+const uiHpNum = document.getElementById('hp-num');
+const uiNoise = document.getElementById('noise-fill');
+const uiKillFill = document.getElementById('kill-fill');
+const uiKillNum = document.getElementById('kill-num');
+const uiPlayersLeft = document.getElementById('players-left');
+const uiNoiseWarn = document.getElementById('noise-warn');
+const uiHideHint = document.getElementById('hide-hint');
+const overlay = document.getElementById('overlay');
+const msgEl = document.getElementById('msg');
+const respawnBtn = document.getElementById('respawn-btn');
+
+// Constants
+const W = 3000, H = 3000;
+const PLAYER_SPEED = 4.5, SLOW_SPEED = 1.8;
+const BOT_COUNT = 18, KILL_GOAL = 10;
+const REGEN = 0.04;
+const SHOOT_COOLDOWN_PLAYER = 280, SHOOT_COOLDOWN_BOT = 900;
+const BULLET_SPEED = 14, BULLET_DMG = 20;
+const NOISE_DECAY = 0.015, NOISE_SHOOT = 1.0, NOISE_RUN = 0.012;
+const BOT_SIGHT_RANGE = 350, BOT_SOUND_RANGE = 500;
+const HIDE_RANGE = 45;
+
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+window.onresize = () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight; };
+
+const keys = {};
+const mouse = { x: 0, y: 0 };
+let camera = { x: 0, y: 0 };
+
+// Game state
+let bullets = [], players = [], popups = [], soundWaves = [], gameActive = false;
+let zone = { x: W/2, y: H/2, radius: W * 0.6 };
+
+// Map objects: buildings and hideables
+let buildings = [], hideables = [];
+
+function genMap() {
+  buildings = [];
+  hideables = [];
+  // Generate city blocks
+  const blockSize = 300, gap = 80;
+  for (let gx = 0; gx < W; gx += blockSize + gap) {
+    for (let gy = 0; gy < H; gy += blockSize + gap) {
+      // Buildings inside block
+      const bw = 80 + Math.random() * 140;
+      const bh = 80 + Math.random() * 140;
+      const bx = gx + Math.random() * (blockSize - bw);
+      const by = gy + Math.random() * (blockSize - bh);
+      buildings.push({ x: bx, y: by, w: bw, h: bh });
+      // Scatter hideables near roads
+      if (Math.random() < 0.5) {
+        const hx = gx + blockSize + Math.random() * gap;
+        const hy = gy + Math.random() * blockSize;
+        hideables.push({ x: hx, y: hy, w: 28, h: 28, type: Math.random()<0.5?'dumpster':'car', occupant: null });
+      }
+    }
+  }
+  // Street lights (light sources)
+}
+
+function collidesBuilding(x, y, r) {
+  for (const b of buildings) {
+    if (x + r > b.x && x - r < b.x + b.w && y + r > b.y && y - r < b.y + b.h) return b;
+  }
+  return null;
+}
+
+// Lighting: returns brightness 0-1 at world coord
+// Street lights placed at intersections
+let streetLights = [];
+function genLights() {
+  streetLights = [];
+  const blockSize = 300, gap = 80;
+  for (let gx = gap/2; gx < W; gx += blockSize + gap) {
+    for (let gy = gap/2; gy < H; gy += blockSize + gap) {
+      streetLights.push({ x: gx, y: gy, radius: 130 + Math.random()*60 });
+    }
+  }
+}
+
+function lightAt(x, y) {
+  let maxLight = 0;
+  for (const l of streetLights) {
+    const d = Math.hypot(x - l.x, y - l.y);
+    if (d < l.radius) {
+      maxLight = Math.max(maxLight, 1 - d/l.radius);
+    }
+  }
+  return maxLight;
+}
+
+class Player {
+  constructor(x, y, isBot=false) {
+    this.x = x; this.y = y;
+    this.radius = 18;
+    this.hp = 100;
+    this.isBot = isBot;
+    this.kills = 0;
+    this.angle = 0;
+    this.lastShot = 0;
+    this.shootDelay = isBot ? SHOOT_COOLDOWN_BOT : SHOOT_COOLDOWN_PLAYER;
+    this.noise = 0; // 0-1
+    this.hidden = false;
+    this.hideObject = null;
+    this.color = isBot ? `hsl(${Math.random()*360},65%,60%)` : '#00ff88';
+    this.alertTarget = null;
+    this.alertTimer = 0; // how long bot is alerted
+    this.wanderAngle = Math.random()*Math.PI*2;
+    this.nextWander = 0;
+    this.lastMoveX = 0; this.lastMoveY = 0;
+    this.visibleTo = []; // which players can see this one
+  }
+
+  get lit() { return lightAt(this.x, this.y); }
+
+  // Visibility: is this player detectable by another?
+  detectableBy(other) {
+    if (this.hidden) return false; // hiding in object = invisible
+    const dist = Math.hypot(this.x - other.x, this.y - other.y);
+    // Light-based sight
+    const myLight = this.lit;
+    const sightRange = BOT_SIGHT_RANGE * (0.2 + myLight * 0.8);
+    if (dist < sightRange) return true;
+    // Sound-based detection
+    if (this.noise > 0.3 && dist < BOT_SOUND_RANGE * this.noise) return true;
+    return false;
+  }
+
+  update() {
+    if (this.hp <= 0) return;
+
+    // Zone damage
+    const dz = Math.hypot(this.x - zone.x, this.y - zone.y);
+    if (dz > zone.radius) this.hp -= 0.12;
+    else if (this.hp < 100) this.hp = Math.min(100, this.hp + REGEN);
+
+    // Noise decay
+    this.noise = Math.max(0, this.noise - NOISE_DECAY);
+
+    if (!this.isBot) this.updatePlayer();
+    else this.updateBot();
+
+    // Clamp world
+    this.x = Math.max(this.radius, Math.min(W - this.radius, this.x));
+    this.y = Math.max(this.radius, Math.min(H - this.radius, this.y));
+  }
+
+  updatePlayer() {
+    if (this.hidden) return; // can't move while hidden
+
+    const sprinting = !keys['shift'];
+    const speed = sprinting ? PLAYER_SPEED : SLOW_SPEED;
+    let moved = false;
+    let nx = this.x, ny = this.y;
+    if (keys['w']) { ny -= speed; moved = true; }
+    if (keys['s']) { ny += speed; moved = true; }
+    if (keys['a']) { nx -= speed; moved = true; }
+    if (keys['d']) { nx += speed; moved = true; }
+
+    if (moved) {
+      if (!collidesBuilding(nx, this.y, this.radius)) this.x = nx;
+      if (!collidesBuilding(this.x, ny, this.radius)) this.y = ny;
+      if (sprinting) this.noise = Math.min(1, this.noise + NOISE_RUN);
+    }
+
+    this.angle = Math.atan2(
+      mouse.y - canvas.height/2,
+      mouse.x - canvas.width/2
+    );
+    camera.x = this.x - canvas.width/2;
+    camera.y = this.y - canvas.height/2;
+  }
+
+  updateBot() {
+    if (this.hidden) { this.alertTimer = Math.max(0, this.alertTimer - 1); return; }
+
+    // Check if player is detectable
+    const playerEntity = players[0];
+    let canDetect = playerEntity && playerEntity.hp > 0 && playerEntity.detectableBy(this);
+
+    // Sound alert: if player just shot, bots nearby get alerted
+    if (!canDetect && playerEntity && playerEntity.hp > 0) {
+      const d = Math.hypot(this.x - playerEntity.x, this.y - playerEntity.y);
+      if (playerEntity.noise > 0.5 && d < BOT_SOUND_RANGE) {
+        this.alertTarget = { x: playerEntity.x, y: playerEntity.y };
+        this.alertTimer = 180; // investigate for 3 seconds
+        canDetect = false;
+      }
+    }
+
+    if (canDetect) {
+      this.alertTarget = { x: playerEntity.x, y: playerEntity.y };
+      this.alertTimer = 300;
+    }
+
+    let targetX = null, targetY = null;
+
+    // Chase alert position
+    if (this.alertTimer > 0) {
+      this.alertTimer--;
+      targetX = this.alertTarget.x;
+      targetY = this.alertTarget.y;
+    }
+
+    // Also check other bots as targets
+    let nearestEnemy = null, minDist = Infinity;
+    players.forEach(p => {
+      if (p !== this && p.hp > 0 && p.detectableBy(this)) {
+        const d = Math.hypot(p.x-this.x, p.y-this.y);
+        if (d < minDist) { minDist = d; nearestEnemy = p; }
+      }
+    });
+
+    if (nearestEnemy) {
+      targetX = nearestEnemy.x;
+      targetY = nearestEnemy.y;
+    }
+
+    if (targetX !== null) {
+      const ang = Math.atan2(targetY - this.y, targetX - this.x);
+      this.angle = ang;
+      const dist = Math.hypot(targetX - this.x, targetY - this.y);
+      if (dist > 200) { 
+        const nx = this.x + Math.cos(ang)*2.2, ny = this.y + Math.sin(ang)*2.2;
+        if (!collidesBuilding(nx, this.y, this.radius)) this.x = nx;
+        if (!collidesBuilding(this.x, ny, this.radius)) this.y = ny;
+        this.noise = Math.min(1, this.noise + 0.005);
+      } else if (dist < 120) { 
+        const nx = this.x - Math.cos(ang)*2, ny = this.y - Math.sin(ang)*2;
+        if (!collidesBuilding(nx, this.y, this.radius)) this.x = nx;
+        if (!collidesBuilding(this.x, ny, this.radius)) this.y = ny;
+      }
+      if (nearestEnemy) this.shoot();
+    } else {
+      // Zone flee
+      const dz = Math.hypot(this.x - zone.x, this.y - zone.y);
+      if (dz > zone.radius - 80) {
+        const za = Math.atan2(zone.y-this.y, zone.x-this.x);
+        const nx = this.x + Math.cos(za)*2.5, ny = this.y + Math.sin(za)*2.5;
+        if (!collidesBuilding(nx, this.y, this.radius)) this.x = nx;
+        if (!collidesBuilding(this.x, ny, this.radius)) this.y = ny;
+      } else {
+        // Wander in shadows preferably
+        if (Date.now() > this.nextWander) {
+          this.wanderAngle = Math.random()*Math.PI*2;
+          this.nextWander = Date.now() + 1200 + Math.random()*2000;
+        }
+        const nx = this.x + Math.cos(this.wanderAngle)*1.2;
+        const ny = this.y + Math.sin(this.wanderAngle)*1.2;
+        if (!collidesBuilding(nx, this.y, this.radius)) this.x = nx;
+        else this.wanderAngle += Math.PI/2;
+        if (!collidesBuilding(this.x, ny, this.radius)) this.y = ny;
+      }
+    }
+  }
+
+  shoot() {
+    if (Date.now() - this.lastShot < this.shootDelay) return;
+    const spread = this.isBot ? (Math.random()-0.5)*0.12 : 0;
+    const ang = this.angle + spread;
+    bullets.push({
+      x: this.x + Math.cos(ang)*28,
+      y: this.y + Math.sin(ang)*28,
+      vx: Math.cos(ang)*BULLET_SPEED,
+      vy: Math.sin(ang)*BULLET_SPEED,
+      owner: this,
+      life: 120
+    });
+    this.lastShot = Date.now();
+    this.noise = Math.min(1, this.noise + NOISE_SHOOT);
+    // Sound wave visual
+    soundWaves.push({ x: this.x, y: this.y, r: 0, maxR: 200, opacity: 0.5 });
+  }
+
+  tryHide() {
+    if (this.hidden) {
+      // Unhide
+      this.hidden = false;
+      if (this.hideObject) { this.hideObject.occupant = null; this.hideObject = null; }
+      return;
+    }
+    // Find nearest hideable
+    let nearest = null, minD = Infinity;
+    for (const h of hideables) {
+      if (h.occupant) continue;
+      const d = Math.hypot(this.x - h.x, this.y - h.y);
+      if (d < HIDE_RANGE && d < minD) { minD = d; nearest = h; }
+    }
+    if (nearest) {
+      this.hidden = true;
+      this.hideObject = nearest;
+      nearest.occupant = this;
+      this.x = nearest.x + nearest.w/2;
+      this.y = nearest.y + nearest.h/2;
+      popups.push({ x: this.x, y: this.y - 30, text: 'HIDDEN', color:'#00ff88', life:60, opacity:1 });
+    }
+  }
+
+  draw() {
+    if (this.hp <= 0) return;
+    const sx = this.x - camera.x, sy = this.y - camera.y;
+
+    // Visibility: if bot and not in light and not making noise, draw faded
+    const isPlayer = !this.isBot;
+    if (!isPlayer) {
+      const myLight = this.lit;
+      const player = players[0];
+      const canSee = player && this.detectableBy(player);
+      if (!canSee && !isPlayer) return; // don't draw undetectable bots
+    }
+
+    if (this.hidden) return; // fully invisible while hiding
+
+    ctx.save();
+    ctx.translate(sx, sy);
+
+    // Visibility ring (light halo around player)
+    if (isPlayer) {
+      // Always draw a strong glow around player regardless of light level
+      const grad = ctx.createRadialGradient(0,0,0,0,0,80);
+      grad.addColorStop(0, 'rgba(0,255,136,0.25)');
+      grad.addColorStop(0.5, 'rgba(0,255,136,0.08)');
+      grad.addColorStop(1, 'transparent');
+      ctx.fillStyle = grad;
+      ctx.beginPath(); ctx.arc(0,0,80,0,Math.PI*2); ctx.fill();
+    }
+
+    // HP bar overhead
+    const barW = 50, barH = 6;
+    ctx.fillStyle = 'rgba(0,0,0,0.7)';
+    ctx.fillRect(-barW/2, -this.radius-18, barW, barH);
+    const pct = Math.max(0, this.hp/100);
+    ctx.fillStyle = pct > 0.5 ? '#00ff88' : pct > 0.25 ? '#ffcc00' : '#ff3344';
+    ctx.fillRect(-barW/2, -this.radius-18, barW*pct, barH);
+    ctx.fillStyle = 'white';
+    ctx.font = 'bold 8px Share Tech Mono';
+    ctx.textAlign = 'center';
+    ctx.fillText(Math.ceil(this.hp), 0, -this.radius-22);
+
+    // Noise indicator dot
+    if (this.noise > 0.2) {
+      ctx.beginPath();
+      ctx.arc(this.radius+6, -this.radius+2, 4*this.noise, 0, Math.PI*2);
+      ctx.fillStyle = `rgba(255,${Math.floor(150 - this.noise*100)},0,${this.noise})`;
+      ctx.fill();
+    }
+
+    // Body
+    ctx.rotate(this.angle);
+    const grd = ctx.createRadialGradient(-4,-4,1,0,0,this.radius);
+    if (isPlayer) {
+      grd.addColorStop(0,'#aaffcc');
+      grd.addColorStop(1,'#008844');
+    } else {
+      const h = parseInt(this.color.match(/hsl\((\d+)/)?.[1]||'200');
+      grd.addColorStop(0,`hsl(${h},80%,75%)`);
+      grd.addColorStop(1,`hsl(${h},60%,40%)`);
+    }
+    ctx.fillStyle = grd;
+    ctx.shadowColor = isPlayer ? '#00ff88' : this.color;
+    ctx.shadowBlur = isPlayer ? 28 : 8;
+    ctx.beginPath(); ctx.arc(0,0,this.radius,0,Math.PI*2); ctx.fill();
+    if (isPlayer) {
+      ctx.strokeStyle = '#00ff88';
+      ctx.lineWidth = 2.5;
+      ctx.stroke();
+    }
+    ctx.shadowBlur = 0;
+    // Gun barrel
+    ctx.fillStyle = '#222';
+    ctx.fillRect(this.radius-4, -4, 22, 8);
+    ctx.fillStyle = '#555';
+    ctx.fillRect(this.radius+12, -3, 6, 6);
+    ctx.restore();
+  }
+}
+
+// Particles / popups
+function spawnPopup(x, y, text, color='#ff4455') {
+  popups.push({ x, y, text, color, life:50, opacity:1 });
+}
+
+function initGame() {
+  genMap(); genLights();
+  zone = { x: W/2, y: H/2, radius: W*0.58 };
+  bullets = []; popups = []; soundWaves = [];
+  players = [new Player(W/2, H/2, false)];
+  for (let i=0; i<BOT_COUNT; i++) {
+    let bx, by, attempts=0;
+    do { bx=Math.random()*W; by=Math.random()*H; attempts++; }
+    while (collidesBuilding(bx,by,20) && attempts<20);
+    players.push(new Player(bx, by, true));
+  }
+  // Reset hideables occupants
+  hideables.forEach(h=>h.occupant=null);
+  gameActive = true;
+  overlay.style.display = 'none';
+}
+
+respawnBtn.onclick = initGame;
+window.onkeydown = e => {
+  keys[e.key.toLowerCase()] = true;
+  if (e.key.toLowerCase() === 'f' && gameActive && players[0]?.hp > 0) players[0].tryHide();
+};
+window.onkeyup = e => keys[e.key.toLowerCase()] = false;
+window.onmousemove = e => { mouse.x = e.clientX; mouse.y = e.clientY; };
+window.onmousedown = () => { if (gameActive && players[0]?.hp > 0 && !players[0].hidden) players[0].shoot(); };
+
+// Darkness overlay - rendered as a dark layer with "holes" cut by lights
+function drawDarkness() {
+  // Full screen dark overlay
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,5,0.45)';
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+
+  ctx.globalCompositeOperation = 'destination-out';
+
+  // Street lights
+  for (const l of streetLights) {
+    const sx = l.x - camera.x, sy = l.y - camera.y;
+    if (sx < -l.radius || sx > canvas.width+l.radius || sy < -l.radius || sy > canvas.height+l.radius) continue;
+    const grad = ctx.createRadialGradient(sx,sy,0,sx,sy,l.radius);
+    grad.addColorStop(0,'rgba(0,0,0,0.95)');
+    grad.addColorStop(0.4,'rgba(0,0,0,0.6)');
+    grad.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath(); ctx.arc(sx,sy,l.radius,0,Math.PI*2); ctx.fill();
+  }
+
+  // Player's own tiny vision radius
+  const p = players[0];
+  if (p && p.hp > 0 && !p.hidden) {
+    const px = p.x - camera.x, py = p.y - camera.y;
+    const vision = 160 + p.lit * 80;
+    const pg = ctx.createRadialGradient(px,py,0,px,py,vision);
+    pg.addColorStop(0,'rgba(0,0,0,0.7)');
+    pg.addColorStop(0.5,'rgba(0,0,0,0.3)');
+    pg.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle = pg;
+    ctx.beginPath(); ctx.arc(px,py,vision,0,Math.PI*2); ctx.fill();
+  }
+
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.restore();
+}
+
+function drawWorld() {
+  // Sky/ground
+  ctx.fillStyle = '#0a0c12';
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+
+  // World floor
+  ctx.fillStyle = '#1a1e2e';
+  ctx.fillRect(-camera.x, -camera.y, W, H);
+
+  // Road grid lines
+  ctx.strokeStyle = '#2a3450';
+  ctx.lineWidth = 2;
+  const blockSize=300,gap=80;
+  for (let gx=0; gx<W; gx+=blockSize+gap) {
+    ctx.beginPath(); ctx.moveTo(gx-camera.x,0-camera.y); ctx.lineTo(gx-camera.x,H-camera.y); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(gx+blockSize-camera.x,0-camera.y); ctx.lineTo(gx+blockSize-camera.x,H-camera.y); ctx.stroke();
+  }
+  for (let gy=0; gy<H; gy+=blockSize+gap) {
+    ctx.beginPath(); ctx.moveTo(0-camera.x,gy-camera.y); ctx.lineTo(W-camera.x,gy-camera.y); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0-camera.x,gy+blockSize-camera.y); ctx.lineTo(W-camera.x,gy+blockSize-camera.y); ctx.stroke();
+  }
+
+  // Buildings
+  for (const b of buildings) {
+    const bx=b.x-camera.x, by=b.y-camera.y;
+    if (bx+b.w<0||bx>canvas.width||by+b.h<0||by>canvas.height) continue;
+    ctx.fillStyle = '#252d45';
+    ctx.fillRect(bx,by,b.w,b.h);
+    ctx.strokeStyle = '#3a4a6a';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(bx,by,b.w,b.h);
+    // Windows - some lit up yellow
+    ctx.fillStyle = Math.random()<0.003?'#ffee88':'rgba(60,90,140,0.5)';
+    for (let wx=bx+8; wx<bx+b.w-12; wx+=16) {
+      for (let wy=by+8; wy<by+b.h-12; wy+=16) {
+        ctx.fillRect(wx,wy,8,8);
+      }
+    }
+  }
+
+  // Street lights (pole + glow)
+  for (const l of streetLights) {
+    const sx=l.x-camera.x, sy=l.y-camera.y;
+    if (sx<-20||sx>canvas.width+20||sy<-20||sy>canvas.height+20) continue;
+    ctx.fillStyle='#334466';
+    ctx.fillRect(sx-2,sy-24,4,24);
+    const lg=ctx.createRadialGradient(sx,sy,0,sx,sy,12);
+    lg.addColorStop(0,'rgba(255,230,150,0.9)');
+    lg.addColorStop(1,'rgba(255,230,150,0)');
+    ctx.fillStyle=lg;
+    ctx.beginPath(); ctx.arc(sx,sy,12,0,Math.PI*2); ctx.fill();
+  }
+
+  // Hideables
+  for (const h of hideables) {
+    const hx=h.x-camera.x, hy=h.y-camera.y;
+    if (hx+h.w<0||hx>canvas.width||hy+h.h<0||hy>canvas.height) continue;
+    if (h.type==='dumpster') {
+      ctx.fillStyle='#1f4433';
+      ctx.strokeStyle='#3a8855';
+    } else {
+      ctx.fillStyle='#1f1f40';
+      ctx.strokeStyle='#4444aa';
+    }
+    ctx.lineWidth=2;
+    ctx.fillRect(hx,hy,h.w,h.h);
+    ctx.strokeRect(hx,hy,h.w,h.h);
+    // Label
+    ctx.fillStyle='rgba(100,200,150,0.5)';
+    ctx.font='7px Share Tech Mono';
+    ctx.textAlign='center';
+    ctx.fillText(h.type==='dumpster'?'🗑':'🚗',hx+h.w/2,hy+h.h/2+3);
+    // Occupant glow
+    if (h.occupant) {
+      ctx.strokeStyle='rgba(0,255,136,0.6)';
+      ctx.lineWidth=2;
+      ctx.strokeRect(hx-2,hy-2,h.w+4,h.h+4);
+    }
+    // Nearby hint for player
+    const p=players[0];
+    if (p&&p.hp>0&&!p.hidden&&!h.occupant) {
+      const d=Math.hypot(p.x-h.x-h.w/2,p.y-h.y-h.h/2);
+      if (d<HIDE_RANGE) {
+        ctx.fillStyle='rgba(0,255,136,0.8)';
+        ctx.font='bold 9px Share Tech Mono';
+        ctx.fillText('[F]',hx+h.w/2,hy-6);
+      }
+    }
+  }
+
+  // Zone circle
+  ctx.strokeStyle='rgba(0,150,255,0.4)';
+  ctx.lineWidth=3;
+  ctx.setLineDash([10,6]);
+  ctx.beginPath();
+  ctx.arc(zone.x-camera.x,zone.y-camera.y,zone.radius,0,Math.PI*2);
+  ctx.stroke();
+  ctx.setLineDash([]);
+}
+
+function drawBullets() {
+  for (const b of bullets) {
+    const bx=b.x-camera.x, by=b.y-camera.y;
+    const g=ctx.createRadialGradient(bx,by,0,bx,by,5);
+    g.addColorStop(0,'rgba(255,255,200,1)');
+    g.addColorStop(1,'rgba(255,150,0,0)');
+    ctx.fillStyle=g;
+    ctx.beginPath(); ctx.arc(bx,by,5,0,Math.PI*2); ctx.fill();
+  }
+}
+
+function drawSoundWaves() {
+  for (const s of soundWaves) {
+    ctx.strokeStyle=`rgba(255,100,0,${s.opacity*0.6})`;
+    ctx.lineWidth=1.5;
+    ctx.beginPath();
+    ctx.arc(s.x-camera.x,s.y-camera.y,s.r,0,Math.PI*2);
+    ctx.stroke();
+  }
+}
+
+function drawPopups() {
+  for (const p of popups) {
+    ctx.fillStyle=p.color.replace(')',`,${p.opacity})`).replace('rgb(','rgba(').replace('#','rgba('+parseInt(p.color.slice(1,3),16)+','+parseInt(p.color.slice(3,5),16)+','+parseInt(p.color.slice(5,7),16)+',');
+    ctx.font='bold 14px Rajdhani';
+    ctx.textAlign='center';
+    // Simple approach
+    ctx.globalAlpha=p.opacity;
+    ctx.fillStyle=p.color;
+    ctx.fillText(p.text, p.x-camera.x, p.y-camera.y);
+    ctx.globalAlpha=1;
+  }
+}
+
+function drawMinimap() {
+  const ms=160, pad=16;
+  const mx=canvas.width-ms-pad, my=pad;
+  const scale=ms/W;
+  ctx.fillStyle='rgba(0,0,0,0.8)';
+  ctx.fillRect(mx,my,ms,ms);
+  ctx.strokeStyle='#1a3a5a';
+  ctx.lineWidth=1;
+  ctx.strokeRect(mx,my,ms,ms);
+
+  // Zone
+  ctx.strokeStyle='rgba(0,150,255,0.4)';
+  ctx.lineWidth=1;
+  ctx.beginPath();
+  ctx.arc(mx+zone.x*scale,my+zone.y*scale,zone.radius*scale,0,Math.PI*2);
+  ctx.stroke();
+
+  // Players
+  players.forEach((p,i)=>{
+    if (p.hp<=0||p.hidden) return;
+    ctx.fillStyle=i===0?'#00ff88':p.color;
+    ctx.beginPath();
+    ctx.arc(mx+p.x*scale,my+p.y*scale,i===0?4:2.5,0,Math.PI*2);
+    ctx.fill();
+  });
+}
+
+function update() {
+  if (!gameActive) return;
+  zone.radius -= 0.1;
+  if (zone.radius < 60) zone.radius = 60;
+
+  players.forEach(p=>p.update());
+
+  // Bullets
+  for (let i=bullets.length-1;i>=0;i--) {
+    const b=bullets[i];
+    b.x+=b.vx; b.y+=b.vy; b.life--;
+    // Building collision
+    if (collidesBuilding(b.x,b.y,4)) { bullets.splice(i,1); continue; }
+    if (b.life<=0||b.x<0||b.x>W||b.y<0||b.y>H) { bullets.splice(i,1); continue; }
+    let hit=false;
+    for (const p of players) {
+      if (p===b.owner||p.hp<=0||p.hidden) continue;
+      if (Math.hypot(b.x-p.x,b.y-p.y)<p.radius) {
+        p.hp-=BULLET_DMG;
+        spawnPopup(p.x,p.y-25,`-${BULLET_DMG}`);
+        if (p.hp<=0 && b.owner===players[0]) {
+          players[0].kills++;
+          spawnPopup(p.x,p.y-50,'ELIMINATED','#ffcc00');
+        }
+        hit=true; break;
+      }
+    }
+    if (hit) bullets.splice(i,1);
+  }
+
+  // Sound waves
+  for (let i=soundWaves.length-1;i>=0;i--) {
+    soundWaves[i].r+=4;
+    soundWaves[i].opacity-=0.025;
+    if (soundWaves[i].opacity<=0) soundWaves.splice(i,1);
+  }
+
+  // Popups
+  for (let i=popups.length-1;i>=0;i--) {
+    popups[i].y-=0.8;
+    popups[i].life--;
+    popups[i].opacity=popups[i].life/50;
+    if (popups[i].life<=0) popups.splice(i,1);
+  }
+
+  // UI update
+  const user=players[0];
+  if (user) {
+    uiHpFill.style.width=`${Math.max(0,user.hp)}%`;
+    uiHpNum.textContent=`${Math.ceil(Math.max(0,user.hp))} / 100`;
+    uiNoise.style.width=`${user.noise*100}%`;
+    uiKillFill.style.width=`${Math.min(100,(user.kills/KILL_GOAL)*100)}%`;
+    uiKillNum.textContent=`${user.kills} KILLS`;
+
+    const lit=user.lit;
+    const isVisible=lit>0.3||user.noise>0.4;
+    uiNoiseWarn.style.opacity=isVisible&&!user.hidden?'1':'0';
+    uiHideHint.style.opacity=hideables.some(h=>{
+      const d=Math.hypot(user.x-h.x-h.w/2,user.y-h.y-h.h/2);
+      return d<HIDE_RANGE&&(!h.occupant||h.occupant===user);
+    })?'1':'0';
+  }
+  const alive=players.filter(p=>p.hp>0).length;
+  uiPlayersLeft.textContent=`PLAYERS: ${alive}`;
+
+  if (user&&user.hp<=0) { gameActive=false; msgEl.textContent='ELIMINATED'; overlay.style.display='flex'; }
+  else if (alive===1&&user&&user.hp>0) { gameActive=false; msgEl.textContent='VICTORY'; overlay.style.display='flex'; }
+}
+
+function draw() {
+  drawWorld();
+  drawSoundWaves();
+  drawBullets();
+  players.forEach(p=>p.draw());
+  drawDarkness();
+  drawPopups();
+
+  update();
+  requestAnimationFrame(draw);
+}
+
+initGame();
+draw();
+</script>
+</body>
+</html>
