@@ -158,6 +158,151 @@ const NOISE_DECAY = 0.015, NOISE_SHOOT = 1.0, NOISE_RUN = 0.012;
 const BOT_SIGHT_RANGE = 350, BOT_SOUND_RANGE = 500;
 const HIDE_RANGE = 45;
 
+// ── Audio Engine (Web Audio API – no files needed) ──────────────────────────
+const AudioCtx = window.AudioContext || window.webkitAudioContext;
+let audioCtx = null;
+
+function ensureAudio() {
+  if (!audioCtx) audioCtx = new AudioCtx();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+}
+
+// Master gain
+function getMaster() {
+  if (!audioCtx) return null;
+  if (!getMaster._node) {
+    getMaster._node = audioCtx.createGain();
+    getMaster._node.gain.value = 0.6;
+    getMaster._node.connect(audioCtx.destination);
+  }
+  return getMaster._node;
+}
+
+function playGunshot(isPlayer = true) {
+  ensureAudio(); if (!audioCtx) return;
+  const t = audioCtx.currentTime;
+  // Noise burst
+  const buf = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.18, audioCtx.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 2);
+  const src = audioCtx.createBufferSource();
+  src.buffer = buf;
+  // Band-pass to shape it
+  const bp = audioCtx.createBiquadFilter();
+  bp.type = 'bandpass'; bp.frequency.value = isPlayer ? 280 : 180; bp.Q.value = 0.6;
+  const gain = audioCtx.createGain();
+  gain.gain.setValueAtTime(isPlayer ? 1.2 : 0.5, t);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+  src.connect(bp); bp.connect(gain); gain.connect(getMaster());
+  src.start(t);
+  // Click transient
+  const osc = audioCtx.createOscillator();
+  const og = audioCtx.createGain();
+  osc.frequency.setValueAtTime(isPlayer ? 160 : 100, t);
+  osc.frequency.exponentialRampToValueAtTime(40, t + 0.05);
+  og.gain.setValueAtTime(isPlayer ? 0.8 : 0.3, t);
+  og.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+  osc.connect(og); og.connect(getMaster());
+  osc.start(t); osc.stop(t + 0.08);
+}
+
+function playHit() {
+  ensureAudio(); if (!audioCtx) return;
+  const t = audioCtx.currentTime;
+  const osc = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  osc.type = 'sawtooth';
+  osc.frequency.setValueAtTime(300, t);
+  osc.frequency.exponentialRampToValueAtTime(80, t + 0.12);
+  g.gain.setValueAtTime(0.4, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+  osc.connect(g); g.connect(getMaster());
+  osc.start(t); osc.stop(t + 0.12);
+}
+
+function playEliminate() {
+  ensureAudio(); if (!audioCtx) return;
+  const t = audioCtx.currentTime;
+  [0, 0.08, 0.18].forEach((delay, i) => {
+    const osc = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    osc.type = 'square';
+    osc.frequency.value = [220, 330, 440][i];
+    g.gain.setValueAtTime(0.3, t + delay);
+    g.gain.exponentialRampToValueAtTime(0.001, t + delay + 0.15);
+    osc.connect(g); g.connect(getMaster());
+    osc.start(t + delay); osc.stop(t + delay + 0.15);
+  });
+}
+
+function playFootstep() {
+  ensureAudio(); if (!audioCtx) return;
+  const t = audioCtx.currentTime;
+  const buf = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.05, audioCtx.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / d.length);
+  const src = audioCtx.createBufferSource();
+  src.buffer = buf;
+  const lp = audioCtx.createBiquadFilter();
+  lp.type = 'lowpass'; lp.frequency.value = 400;
+  const g = audioCtx.createGain();
+  g.gain.value = 0.12;
+  src.connect(lp); lp.connect(g); g.connect(getMaster());
+  src.start(t);
+}
+
+function playHide(entering) {
+  ensureAudio(); if (!audioCtx) return;
+  const t = audioCtx.currentTime;
+  const osc = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(entering ? 300 : 500, t);
+  osc.frequency.exponentialRampToValueAtTime(entering ? 150 : 250, t + 0.15);
+  g.gain.setValueAtTime(0.2, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+  osc.connect(g); g.connect(getMaster());
+  osc.start(t); osc.stop(t + 0.15);
+}
+
+function playHurt() {
+  ensureAudio(); if (!audioCtx) return;
+  const t = audioCtx.currentTime;
+  const buf = audioCtx.createBuffer(1, audioCtx.sampleRate * 0.25, audioCtx.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 1.5) * 0.6;
+  const src = audioCtx.createBufferSource();
+  src.buffer = buf;
+  const bp = audioCtx.createBiquadFilter();
+  bp.type = 'bandpass'; bp.frequency.value = 600; bp.Q.value = 1.5;
+  const g = audioCtx.createGain();
+  g.gain.setValueAtTime(0.5, t);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
+  src.connect(bp); bp.connect(g); g.connect(getMaster());
+  src.start(t);
+}
+
+function playVictory() {
+  ensureAudio(); if (!audioCtx) return;
+  const t = audioCtx.currentTime;
+  const notes = [262, 330, 392, 523];
+  notes.forEach((freq, i) => {
+    const osc = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.value = freq;
+    g.gain.setValueAtTime(0, t + i*0.12);
+    g.gain.linearRampToValueAtTime(0.3, t + i*0.12 + 0.05);
+    g.gain.exponentialRampToValueAtTime(0.001, t + i*0.12 + 0.4);
+    osc.connect(g); g.connect(getMaster());
+    osc.start(t + i*0.12); osc.stop(t + i*0.12 + 0.4);
+  });
+}
+
+// Footstep timer
+let footstepTimer = 0;
+// ─────────────────────────────────────────────────────────────────────────────
+
 canvas.width = window.innerWidth;
 canvas.height = window.innerHeight;
 window.onresize = () => { canvas.width = window.innerWidth; canvas.height = window.innerHeight; };
@@ -409,6 +554,13 @@ class Player {
     this.noise = Math.min(1, this.noise + NOISE_SHOOT);
     // Sound wave visual
     soundWaves.push({ x: this.x, y: this.y, r: 0, maxR: 200, opacity: 0.5 });
+    // Audio
+    if (!this.isBot) playGunshot(true);
+    else if (this.isBot) {
+      // Only play if nearby player
+      const p = players[0];
+      if (p && Math.hypot(this.x-p.x,this.y-p.y) < 700) playGunshot(false);
+    }
   }
 
   tryHide() {
@@ -416,6 +568,7 @@ class Player {
       // Unhide
       this.hidden = false;
       if (this.hideObject) { this.hideObject.occupant = null; this.hideObject = null; }
+      playHide(false);
       return;
     }
     // Find nearest hideable
@@ -431,6 +584,7 @@ class Player {
       nearest.occupant = this;
       this.x = nearest.x + nearest.w/2;
       this.y = nearest.y + nearest.h/2;
+      playHide(true);
       popups.push({ x: this.x, y: this.y - 30, text: 'HIDDEN', color:'#00ff88', life:60, opacity:1 });
     }
   }
@@ -543,7 +697,10 @@ window.onkeydown = e => {
 };
 window.onkeyup = e => keys[e.key.toLowerCase()] = false;
 window.onmousemove = e => { mouse.x = e.clientX; mouse.y = e.clientY; };
-window.onmousedown = () => { if (gameActive && players[0]?.hp > 0 && !players[0].hidden) players[0].shoot(); };
+window.onmousedown = () => {
+  ensureAudio();
+  if (gameActive && players[0]?.hp > 0 && !players[0].hidden) players[0].shoot();
+};
 
 // Darkness overlay - rendered as a dark layer with "holes" cut by lights
 function drawDarkness() {
@@ -764,9 +921,12 @@ function update() {
       if (Math.hypot(b.x-p.x,b.y-p.y)<p.radius) {
         p.hp-=BULLET_DMG;
         spawnPopup(p.x,p.y-25,`-${BULLET_DMG}`);
+        playHit();
+        if (!p.isBot) playHurt(); // extra grunt for player getting hit
         if (p.hp<=0 && b.owner===players[0]) {
           players[0].kills++;
           spawnPopup(p.x,p.y-50,'ELIMINATED','#ffcc00');
+          playEliminate();
         }
         hit=true; break;
       }
@@ -809,8 +969,26 @@ function update() {
   const alive=players.filter(p=>p.hp>0).length;
   uiPlayersLeft.textContent=`PLAYERS: ${alive}`;
 
-  if (user&&user.hp<=0) { gameActive=false; msgEl.textContent='ELIMINATED'; overlay.style.display='flex'; }
-  else if (alive===1&&user&&user.hp>0) { gameActive=false; msgEl.textContent='VICTORY'; overlay.style.display='flex'; }
+  if (user&&user.hp<=0) {
+    gameActive=false; msgEl.textContent='ELIMINATED'; overlay.style.display='flex';
+    playHurt(); // death sound
+  }
+  else if (alive===1&&user&&user.hp>0) {
+    gameActive=false; msgEl.textContent='VICTORY'; overlay.style.display='flex';
+    playVictory();
+  }
+
+  // Footsteps for player
+  if (user && user.hp > 0 && !user.hidden) {
+    const moving = keys['w']||keys['s']||keys['a']||keys['d'];
+    if (moving) {
+      footstepTimer--;
+      if (footstepTimer <= 0) {
+        playFootstep();
+        footstepTimer = keys['shift'] ? 28 : 18; // slower cadence when walking
+      }
+    } else { footstepTimer = 0; }
+  }
 }
 
 function draw() {
