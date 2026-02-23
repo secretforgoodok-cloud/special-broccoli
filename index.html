@@ -116,12 +116,55 @@
   </div>
   <div id="noise-warn">⚠ YOU ARE VISIBLE</div>
   <div id="hide-hint">[ F ] HIDE / UNHIDE</div>
+
+  <!-- Points & Weapon HUD (bottom centre) -->
+  <div id="bottom-hud" style="
+    position:absolute;bottom:20px;left:50%;transform:translateX(-50%);
+    display:flex;align-items:center;gap:20px;pointer-events:none;
+    background:rgba(0,5,15,0.75);border:1px solid #1a3a5a;
+    padding:10px 24px;border-radius:4px;">
+    <div style="text-align:center;">
+      <div style="font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:3px;color:#5599aa;">POINTS</div>
+      <div id="points-val" style="font-family:'Share Tech Mono',monospace;font-size:28px;font-weight:700;color:#ffd700;text-shadow:0 0 12px #ffd700;line-height:1;">0</div>
+    </div>
+    <div style="width:1px;height:40px;background:#1a3a5a;"></div>
+    <div style="text-align:center;">
+      <div style="font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:3px;color:#5599aa;">WEAPON</div>
+      <div id="weapon-name" style="font-family:'Rajdhani',sans-serif;font-size:20px;font-weight:700;color:#aaddff;letter-spacing:2px;line-height:1.2;">PISTOL</div>
+      <div id="ammo-info" style="font-family:'Share Tech Mono',monospace;font-size:9px;color:#446;letter-spacing:1px;">∞ AMMO</div>
+    </div>
+    <div style="width:1px;height:40px;background:#1a3a5a;"></div>
+    <div style="font-family:'Share Tech Mono',monospace;font-size:10px;color:#334;letter-spacing:2px;text-align:center;line-height:1.6;">
+      TAB<br><span style="color:#3a4a5a;font-size:8px;">OPEN SHOP</span>
+    </div>
+  </div>
+
+  <!-- Shop overlay -->
+  <div id="shop" style="
+    position:absolute;top:0;left:0;width:100%;height:100%;
+    background:rgba(0,3,10,0.95);
+    display:none;flex-direction:column;align-items:center;justify-content:center;
+    pointer-events:all;z-index:50;">
+    <div style="font-family:'Rajdhani',sans-serif;font-size:52px;font-weight:700;
+      letter-spacing:10px;color:#ffd700;text-shadow:0 0 30px rgba(255,215,0,0.4);margin-bottom:4px;">ARMORY</div>
+    <div style="font-family:'Share Tech Mono',monospace;font-size:11px;letter-spacing:5px;color:#446;margin-bottom:10px;">SPEND YOUR KILL POINTS</div>
+    <div id="shop-points" style="font-family:'Share Tech Mono',monospace;font-size:22px;color:#ffd700;
+      margin-bottom:30px;text-shadow:0 0 10px rgba(255,215,0,0.5);">
+      ◆ <span id="shop-pts-val">0</span> PTS
+    </div>
+    <div id="shop-grid" style="display:grid;grid-template-columns:repeat(2,1fr);gap:14px;max-width:720px;width:92%;"></div>
+    <div style="margin-top:24px;font-family:'Share Tech Mono',monospace;font-size:10px;color:#2a3a4a;letter-spacing:3px;">
+      [ TAB ] OR [ ESC ] TO CLOSE
+    </div>
+  </div>
+
   <div id="controls">
     <div><span class="key">WASD</span> – MOVE</div>
     <div><span class="key">MOUSE</span> – AIM</div>
     <div><span class="key">CLICK</span> – SHOOT</div>
     <div><span class="key">F</span> – HIDE IN OBJECT</div>
-    <div><span class="key">SHIFT</span> – WALK SLOWLY (SILENT)</div>
+    <div><span class="key">SHIFT</span> – SILENT WALK</div>
+    <div><span class="key">TAB</span> – SHOP</div>
   </div>
 </div>
 <div id="overlay">
@@ -157,8 +200,50 @@ const BULLET_SPEED = 14, BULLET_DMG = 20;
 const NOISE_DECAY = 0.015, NOISE_SHOOT = 1.0, NOISE_RUN = 0.012;
 const BOT_SIGHT_RANGE = 350, BOT_SOUND_RANGE = 500;
 const HIDE_RANGE = 45;
+const POINTS_PER_KILL = 100;
 
-// ── Audio Engine (Web Audio API – no files needed) ──────────────────────────
+// ── Weapon Definitions ────────────────────────────────────────────────────────
+const WEAPONS = {
+  pistol: {
+    name: 'PISTOL', cost: 0, owned: true,
+    damage: 20, cooldown: 280, bulletSpeed: 14, spread: 0,
+    bulletsPerShot: 1, bulletLife: 120, noiseAdd: 1.0,
+    color: '#ffee88', radius: 5,
+    desc: 'Reliable sidearm. Silent enough.', icon: '🔫'
+  },
+  smg: {
+    name: 'SMG', cost: 150, owned: false,
+    damage: 10, cooldown: 100, bulletSpeed: 16, spread: 0.08,
+    bulletsPerShot: 1, bulletLife: 100, noiseAdd: 1.0,
+    color: '#88ddff', radius: 4,
+    desc: 'Fast fire rate. Noisy but lethal.', icon: '⚡'
+  },
+  shotgun: {
+    name: 'SHOTGUN', cost: 200, owned: false,
+    damage: 18, cooldown: 700, bulletSpeed: 13, spread: 0.32,
+    bulletsPerShot: 6, bulletLife: 55, noiseAdd: 1.0,
+    color: '#ff8844', radius: 5,
+    desc: '6 pellets. Destroys close range.', icon: '💥'
+  },
+  sniper: {
+    name: 'SNIPER', cost: 300, owned: false,
+    damage: 80, cooldown: 1500, bulletSpeed: 24, spread: 0,
+    bulletsPerShot: 1, bulletLife: 240, noiseAdd: 1.0,
+    color: '#ff4466', radius: 4,
+    desc: 'One shot, one kill. Huge range.', icon: '🎯'
+  },
+  grenade: {
+    name: 'LAUNCHER', cost: 400, owned: false,
+    damage: 60, cooldown: 1200, bulletSpeed: 9, spread: 0,
+    bulletsPerShot: 1, bulletLife: 70, noiseAdd: 1.0,
+    color: '#aaff44', radius: 8, explosive: true, explosionRadius: 90,
+    desc: 'Explosive splash. Clears cover.', icon: '💣'
+  }
+};
+let currentWeapon = 'pistol';
+let playerPoints = 0;
+let shopOpen = false;
+// ───────────────────────────────────────────────────────────────────────────── (Web Audio API – no files needed) ──────────────────────────
 const AudioCtx = window.AudioContext || window.webkitAudioContext;
 let audioCtx = null;
 
@@ -299,6 +384,43 @@ function playVictory() {
   });
 }
 
+function playBuy() {
+  ensureAudio(); if (!audioCtx) return;
+  const t = audioCtx.currentTime;
+  [523, 659, 784].forEach((freq, i) => {
+    const osc = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    osc.type = 'sine'; osc.frequency.value = freq;
+    g.gain.setValueAtTime(0.25, t + i*0.07);
+    g.gain.exponentialRampToValueAtTime(0.001, t + i*0.07 + 0.2);
+    osc.connect(g); g.connect(getMaster());
+    osc.start(t + i*0.07); osc.stop(t + i*0.07 + 0.2);
+  });
+}
+
+function playDenied() {
+  ensureAudio(); if (!audioCtx) return;
+  const t = audioCtx.currentTime;
+  const osc = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  osc.type = 'sawtooth'; osc.frequency.value = 120;
+  g.gain.setValueAtTime(0.3, t); g.gain.exponentialRampToValueAtTime(0.001, t+0.2);
+  osc.connect(g); g.connect(getMaster());
+  osc.start(t); osc.stop(t+0.2);
+}
+
+function playExplosion() {
+  ensureAudio(); if (!audioCtx) return;
+  const t = audioCtx.currentTime;
+  const buf = audioCtx.createBuffer(1, audioCtx.sampleRate*0.5, audioCtx.sampleRate);
+  const d = buf.getChannelData(0);
+  for (let i=0;i<d.length;i++) d[i]=(Math.random()*2-1)*Math.pow(1-i/d.length,1.2);
+  const src = audioCtx.createBufferSource(); src.buffer=buf;
+  const lp = audioCtx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=300;
+  const g = audioCtx.createGain(); g.gain.setValueAtTime(1.5,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.5);
+  src.connect(lp); lp.connect(g); g.connect(getMaster()); src.start(t);
+}
+
 // Footstep timer
 let footstepTimer = 0;
 // ─────────────────────────────────────────────────────────────────────────────
@@ -393,6 +515,9 @@ class Player {
     this.nextWander = 0;
     this.lastMoveX = 0; this.lastMoveY = 0;
     this.visibleTo = []; // which players can see this one
+    this.hideTimer = 0;       // how long bot stays hidden
+    this.hideCooldown = 0;    // prevent hiding again too soon
+    this.movingToHide = null; // target hideable to walk toward
   }
 
   get lit() { return lightAt(this.x, this.y); }
@@ -455,38 +580,98 @@ class Player {
     camera.y = this.y - canvas.height/2;
   }
 
-  updateBot() {
-    if (this.hidden) { this.alertTimer = Math.max(0, this.alertTimer - 1); return; }
+  // Find nearest free hideable object within range
+  nearestHideable(maxDist = 300) {
+    let best = null, bestD = maxDist;
+    for (const h of hideables) {
+      if (h.occupant) continue;
+      const d = Math.hypot(this.x - (h.x+h.w/2), this.y - (h.y+h.h/2));
+      if (d < bestD) { bestD = d; best = h; }
+    }
+    return best;
+  }
 
-    // Check if player is detectable
+  botHide(h) {
+    this.hidden = true;
+    this.hideObject = h;
+    h.occupant = this;
+    this.x = h.x + h.w/2;
+    this.y = h.y + h.h/2;
+    this.movingToHide = null;
+    // Stay hidden between 3-7 seconds
+    this.hideTimer = 180 + Math.floor(Math.random()*240);
+    this.hideCooldown = 600; // 10s cooldown before hiding again
+  }
+
+  botUnhide() {
+    this.hidden = false;
+    if (this.hideObject) { this.hideObject.occupant = null; this.hideObject = null; }
+  }
+
+  updateBot() {
+    this.hideCooldown = Math.max(0, this.hideCooldown - 1);
+
+    // === HIDDEN STATE ===
+    if (this.hidden) {
+      this.alertTimer = Math.max(0, this.alertTimer - 1);
+      this.hideTimer--;
+
+      const playerEntity = players[0];
+      const playerNearby = playerEntity && playerEntity.hp > 0 &&
+        Math.hypot(this.x - playerEntity.x, this.y - playerEntity.y) < 200;
+
+      // Unhide if: timer expired AND no enemy right outside, or HP recovered enough
+      if (this.hideTimer <= 0 && !playerNearby) {
+        this.botUnhide();
+      }
+      // Peek-shoot: if enemy walks very close, pop out and shoot
+      if (playerNearby && this.hp > 30) {
+        this.botUnhide();
+        this.alertTarget = { x: playerEntity.x, y: playerEntity.y };
+        this.alertTimer = 200;
+      }
+      return;
+    }
+
+    // === MOVING-TO-HIDE STATE ===
+    if (this.movingToHide) {
+      const h = this.movingToHide;
+      // If it got taken by someone else, cancel
+      if (h.occupant) { this.movingToHide = null; }
+      else {
+        const dx = (h.x+h.w/2) - this.x, dy = (h.y+h.h/2) - this.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist < HIDE_RANGE) {
+          this.botHide(h);
+          return;
+        }
+        // Walk toward it quietly
+        const ang = Math.atan2(dy, dx);
+        const nx = this.x + Math.cos(ang)*1.5, ny = this.y + Math.sin(ang)*1.5;
+        if (!collidesBuilding(nx, this.y, this.radius)) this.x = nx;
+        if (!collidesBuilding(this.x, ny, this.radius)) this.y = ny;
+        return;
+      }
+    }
+
+    // === NORMAL AI ===
     const playerEntity = players[0];
     let canDetect = playerEntity && playerEntity.hp > 0 && playerEntity.detectableBy(this);
 
-    // Sound alert: if player just shot, bots nearby get alerted
+    // Sound alert
     if (!canDetect && playerEntity && playerEntity.hp > 0) {
       const d = Math.hypot(this.x - playerEntity.x, this.y - playerEntity.y);
       if (playerEntity.noise > 0.5 && d < BOT_SOUND_RANGE) {
         this.alertTarget = { x: playerEntity.x, y: playerEntity.y };
-        this.alertTimer = 180; // investigate for 3 seconds
-        canDetect = false;
+        this.alertTimer = 180;
       }
     }
-
     if (canDetect) {
       this.alertTarget = { x: playerEntity.x, y: playerEntity.y };
       this.alertTimer = 300;
     }
 
-    let targetX = null, targetY = null;
-
-    // Chase alert position
-    if (this.alertTimer > 0) {
-      this.alertTimer--;
-      targetX = this.alertTarget.x;
-      targetY = this.alertTarget.y;
-    }
-
-    // Also check other bots as targets
+    // Nearest visible enemy
     let nearestEnemy = null, minDist = Infinity;
     players.forEach(p => {
       if (p !== this && p.hp > 0 && p.detectableBy(this)) {
@@ -495,21 +680,36 @@ class Player {
       }
     });
 
-    if (nearestEnemy) {
-      targetX = nearestEnemy.x;
-      targetY = nearestEnemy.y;
+    // === DECIDE TO HIDE? ===
+    // Hide when: low HP and not engaged, OR lit up in street light while no target, OR random stealth wander
+    const isLit = this.lit > 0.4;
+    const lowHp = this.hp < 35;
+    const endangered = nearestEnemy && minDist < 250 && this.hp < 50;
+    const stealthOpportunity = !nearestEnemy && !canDetect && this.hideCooldown === 0 && Math.random() < 0.002;
+
+    if (this.hideCooldown === 0 && !nearestEnemy && (lowHp || endangered || (isLit && stealthOpportunity))) {
+      const h = this.nearestHideable(250);
+      if (h) {
+        this.movingToHide = h;
+        return;
+      }
     }
+
+    // === COMBAT / CHASE ===
+    let targetX = null, targetY = null;
+    if (this.alertTimer > 0) { this.alertTimer--; targetX = this.alertTarget.x; targetY = this.alertTarget.y; }
+    if (nearestEnemy) { targetX = nearestEnemy.x; targetY = nearestEnemy.y; }
 
     if (targetX !== null) {
       const ang = Math.atan2(targetY - this.y, targetX - this.x);
       this.angle = ang;
       const dist = Math.hypot(targetX - this.x, targetY - this.y);
-      if (dist > 200) { 
+      if (dist > 200) {
         const nx = this.x + Math.cos(ang)*2.2, ny = this.y + Math.sin(ang)*2.2;
         if (!collidesBuilding(nx, this.y, this.radius)) this.x = nx;
         if (!collidesBuilding(this.x, ny, this.radius)) this.y = ny;
         this.noise = Math.min(1, this.noise + 0.005);
-      } else if (dist < 120) { 
+      } else if (dist < 120) {
         const nx = this.x - Math.cos(ang)*2, ny = this.y - Math.sin(ang)*2;
         if (!collidesBuilding(nx, this.y, this.radius)) this.x = nx;
         if (!collidesBuilding(this.x, ny, this.radius)) this.y = ny;
@@ -524,9 +724,18 @@ class Player {
         if (!collidesBuilding(nx, this.y, this.radius)) this.x = nx;
         if (!collidesBuilding(this.x, ny, this.radius)) this.y = ny;
       } else {
-        // Wander in shadows preferably
+        // Wander — prefer shadows
         if (Date.now() > this.nextWander) {
-          this.wanderAngle = Math.random()*Math.PI*2;
+          // Bias toward dark areas
+          let darkAngle = Math.random()*Math.PI*2;
+          let darkScore = Infinity;
+          for (let t=0; t<6; t++) {
+            const tryAng = Math.random()*Math.PI*2;
+            const tx = this.x + Math.cos(tryAng)*80, ty = this.y + Math.sin(tryAng)*80;
+            const l = lightAt(tx, ty);
+            if (l < darkScore) { darkScore = l; darkAngle = tryAng; }
+          }
+          this.wanderAngle = darkAngle;
           this.nextWander = Date.now() + 1200 + Math.random()*2000;
         }
         const nx = this.x + Math.cos(this.wanderAngle)*1.2;
@@ -539,27 +748,39 @@ class Player {
   }
 
   shoot() {
-    if (Date.now() - this.lastShot < this.shootDelay) return;
-    const spread = this.isBot ? (Math.random()-0.5)*0.12 : 0;
-    const ang = this.angle + spread;
-    bullets.push({
-      x: this.x + Math.cos(ang)*28,
-      y: this.y + Math.sin(ang)*28,
-      vx: Math.cos(ang)*BULLET_SPEED,
-      vy: Math.sin(ang)*BULLET_SPEED,
-      owner: this,
-      life: 120
-    });
+    const wep = this.isBot ? WEAPONS.pistol : WEAPONS[currentWeapon];
+    const delay = this.isBot ? SHOOT_COOLDOWN_BOT : wep.cooldown;
+    if (Date.now() - this.lastShot < delay) return;
+
+    const count = this.isBot ? 1 : wep.bulletsPerShot;
+    const baseSpread = this.isBot ? 0.12 : wep.spread;
+
+    for (let i = 0; i < count; i++) {
+      const spread = (Math.random() - 0.5) * baseSpread * (count > 1 ? 1 : 0) + (this.isBot ? (Math.random()-0.5)*0.12 : 0);
+      const ang = this.angle + spread + (count > 1 ? (Math.random()-0.5)*baseSpread : 0);
+      bullets.push({
+        x: this.x + Math.cos(ang)*28,
+        y: this.y + Math.sin(ang)*28,
+        vx: Math.cos(ang) * (this.isBot ? BULLET_SPEED : wep.bulletSpeed),
+        vy: Math.sin(ang) * (this.isBot ? BULLET_SPEED : wep.bulletSpeed),
+        owner: this,
+        life: this.isBot ? 120 : wep.bulletLife,
+        damage: this.isBot ? BULLET_DMG : wep.damage,
+        color: this.isBot ? '#ffee88' : wep.color,
+        radius: this.isBot ? 5 : wep.radius,
+        explosive: (!this.isBot && wep.explosive) || false,
+        explosionRadius: wep.explosionRadius || 0
+      });
+    }
+
     this.lastShot = Date.now();
-    this.noise = Math.min(1, this.noise + NOISE_SHOOT);
-    // Sound wave visual
+    this.noise = Math.min(1, this.noise + (this.isBot ? NOISE_SHOOT : wep.noiseAdd));
     soundWaves.push({ x: this.x, y: this.y, r: 0, maxR: 200, opacity: 0.5 });
-    // Audio
+
     if (!this.isBot) playGunshot(true);
-    else if (this.isBot) {
-      // Only play if nearby player
+    else {
       const p = players[0];
-      if (p && Math.hypot(this.x-p.x,this.y-p.y) < 700) playGunshot(false);
+      if (p && Math.hypot(this.x-p.x, this.y-p.y) < 700) playGunshot(false);
     }
   }
 
@@ -677,6 +898,12 @@ function initGame() {
   genMap(); genLights();
   zone = { x: W/2, y: H/2, radius: W*0.58 };
   bullets = []; popups = []; soundWaves = [];
+  playerPoints = 0;
+  currentWeapon = 'pistol';
+  Object.keys(WEAPONS).forEach(k => { if (k !== 'pistol') WEAPONS[k].owned = false; });
+  document.getElementById('weapon-name').textContent = 'PISTOL';
+  document.getElementById('points-val').textContent = '0';
+  closeShop();
   players = [new Player(W/2, H/2, false)];
   for (let i=0; i<BOT_COUNT; i++) {
     let bx, by, attempts=0;
@@ -692,14 +919,22 @@ function initGame() {
 
 respawnBtn.onclick = initGame;
 window.onkeydown = e => {
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    ensureAudio();
+    if (shopOpen) closeShop();
+    else if (gameActive) openShop();
+    return;
+  }
+  if (e.key === 'Escape' && shopOpen) { closeShop(); return; }
   keys[e.key.toLowerCase()] = true;
-  if (e.key.toLowerCase() === 'f' && gameActive && players[0]?.hp > 0) players[0].tryHide();
+  if (e.key.toLowerCase() === 'f' && gameActive && players[0]?.hp > 0 && !shopOpen) players[0].tryHide();
 };
 window.onkeyup = e => keys[e.key.toLowerCase()] = false;
 window.onmousemove = e => { mouse.x = e.clientX; mouse.y = e.clientY; };
 window.onmousedown = () => {
   ensureAudio();
-  if (gameActive && players[0]?.hp > 0 && !players[0].hidden) players[0].shoot();
+  if (gameActive && players[0]?.hp > 0 && !players[0].hidden && !shopOpen) players[0].shoot();
 };
 
 // Darkness overlay - rendered as a dark layer with "holes" cut by lights
@@ -843,17 +1078,20 @@ function drawWorld() {
 function drawBullets() {
   for (const b of bullets) {
     const bx=b.x-camera.x, by=b.y-camera.y;
-    const g=ctx.createRadialGradient(bx,by,0,bx,by,5);
-    g.addColorStop(0,'rgba(255,255,200,1)');
+    const r = b.radius || 5;
+    const col = b.color || 'rgba(255,255,200,1)';
+    const g=ctx.createRadialGradient(bx,by,0,bx,by,r+2);
+    g.addColorStop(0, col);
     g.addColorStop(1,'rgba(255,150,0,0)');
     ctx.fillStyle=g;
-    ctx.beginPath(); ctx.arc(bx,by,5,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(bx,by,r,0,Math.PI*2); ctx.fill();
   }
 }
 
 function drawSoundWaves() {
   for (const s of soundWaves) {
-    ctx.strokeStyle=`rgba(255,100,0,${s.opacity*0.6})`;
+    const col = s.color || '255,100,0';
+    ctx.strokeStyle=`rgba(${col},${s.opacity*0.6})`;
     ctx.lineWidth=1.5;
     ctx.beginPath();
     ctx.arc(s.x-camera.x,s.y-camera.y,s.r,0,Math.PI*2);
@@ -901,6 +1139,122 @@ function drawMinimap() {
   });
 }
 
+// Explosion helper
+function triggerExplosion(ex, ey, radius, owner, damage) {
+  playExplosion();
+  // Visual ring
+  soundWaves.push({ x: ex, y: ey, r: 0, maxR: radius, opacity: 0.9, color: '255,180,0' });
+  soundWaves.push({ x: ex, y: ey, r: 0, maxR: radius*0.6, opacity: 0.7, color: '255,80,0' });
+  // Damage all in radius
+  players.forEach(p => {
+    if (p===owner || p.hp<=0 || p.hidden) return;
+    const d = Math.hypot(p.x-ex, p.y-ey);
+    if (d < radius) {
+      const dmg = Math.floor(damage * (1 - d/radius));
+      p.hp -= dmg;
+      spawnPopup(p.x, p.y-25, `-${dmg}`, '#ff8800');
+      if (!p.isBot) playHurt();
+      if (p.hp<=0 && owner===players[0]) {
+        players[0].kills++;
+        playerPoints += POINTS_PER_KILL;
+        spawnPopup(p.x, p.y-55, `+${POINTS_PER_KILL} PTS`, '#ffd700');
+        spawnPopup(p.x, p.y-35, 'ELIMINATED', '#ffcc00');
+        playEliminate();
+      }
+    }
+  });
+}
+
+// Shop UI
+function buildShopGrid() {
+  const grid = document.getElementById('shop-grid');
+  grid.innerHTML = '';
+  Object.entries(WEAPONS).forEach(([key, wep]) => {
+    if (key === 'pistol') return; // always owned, skip
+    const owned = wep.owned;
+    const active = currentWeapon === key;
+    const canAfford = playerPoints >= wep.cost;
+
+    const card = document.createElement('div');
+    card.style.cssText = `
+      background:${active?'rgba(255,215,0,0.08)':owned?'rgba(0,255,136,0.06)':'rgba(0,10,25,0.8)'};
+      border:1px solid ${active?'#ffd700':owned?'#00ff88':canAfford?'#1a4a6a':'#0f2030'};
+      border-radius:4px;padding:16px 20px;cursor:${owned?'pointer':canAfford?'pointer':'default'};
+      transition:all 0.15s;display:flex;flex-direction:column;gap:6px;
+      opacity:${!owned&&!canAfford?'0.4':'1'};
+    `;
+
+    const topRow = document.createElement('div');
+    topRow.style.cssText = 'display:flex;justify-content:space-between;align-items:center;';
+    topRow.innerHTML = `
+      <span style="font-family:'Rajdhani',sans-serif;font-size:22px;font-weight:700;
+        color:${active?'#ffd700':owned?'#00ff88':'#aaddff'};letter-spacing:2px;">
+        ${wep.icon} ${wep.name}
+      </span>
+      <span style="font-family:'Share Tech Mono',monospace;font-size:14px;
+        color:${owned?'#00ff88':'#ffd700'};">
+        ${owned ? (active?'● ACTIVE':'OWNED') : `◆ ${wep.cost}`}
+      </span>
+    `;
+
+    const stats = document.createElement('div');
+    stats.style.cssText = 'font-family:"Share Tech Mono",monospace;font-size:10px;color:#446;letter-spacing:1px;line-height:1.8;';
+    stats.innerHTML = `
+      DMG ${wep.damage}${wep.explosive?` <span style="color:#ff8800">💥 r${wep.explosionRadius}</span>`:''}
+      &nbsp;|&nbsp; RATE ${Math.round(1000/wep.cooldown*10)/10}/s
+      &nbsp;|&nbsp; RANGE ${Math.round(wep.bulletLife * wep.bulletSpeed / 14)}
+    `;
+
+    const desc = document.createElement('div');
+    desc.style.cssText = 'font-family:"Share Tech Mono",monospace;font-size:10px;color:#557;font-style:italic;';
+    desc.textContent = wep.desc;
+
+    card.appendChild(topRow);
+    card.appendChild(stats);
+    card.appendChild(desc);
+
+    card.onmouseenter = () => { if (!(!owned&&!canAfford)) card.style.background = active?'rgba(255,215,0,0.12)':owned?'rgba(0,255,136,0.1)':'rgba(0,100,200,0.1)'; };
+    card.onmouseleave = () => { card.style.background = active?'rgba(255,215,0,0.08)':owned?'rgba(0,255,136,0.06)':'rgba(0,10,25,0.8)'; };
+
+    card.onclick = () => {
+      if (owned) {
+        currentWeapon = key;
+        buildShopGrid();
+        document.getElementById('weapon-name').textContent = wep.name;
+        document.getElementById('ammo-info').textContent = '∞ AMMO';
+      } else if (canAfford) {
+        playerPoints -= wep.cost;
+        wep.owned = true;
+        currentWeapon = key;
+        document.getElementById('weapon-name').textContent = wep.name;
+        document.getElementById('ammo-info').textContent = '∞ AMMO';
+        document.getElementById('shop-pts-val').textContent = playerPoints;
+        document.getElementById('points-val').textContent = playerPoints;
+        buildShopGrid();
+        playBuy();
+        spawnPopup(players[0].x, players[0].y-40, `${wep.icon} ${wep.name} UNLOCKED!`, '#ffd700');
+      } else {
+        playDenied();
+      }
+    };
+
+    grid.appendChild(card);
+  });
+}
+
+function openShop() {
+  shopOpen = true;
+  const shopEl = document.getElementById('shop');
+  shopEl.style.display = 'flex';
+  document.getElementById('shop-pts-val').textContent = playerPoints;
+  buildShopGrid();
+}
+
+function closeShop() {
+  shopOpen = false;
+  document.getElementById('shop').style.display = 'none';
+}
+
 function update() {
   if (!gameActive) return;
   zone.radius -= 0.1;
@@ -912,21 +1266,32 @@ function update() {
   for (let i=bullets.length-1;i>=0;i--) {
     const b=bullets[i];
     b.x+=b.vx; b.y+=b.vy; b.life--;
-    // Building collision
-    if (collidesBuilding(b.x,b.y,4)) { bullets.splice(i,1); continue; }
-    if (b.life<=0||b.x<0||b.x>W||b.y<0||b.y>H) { bullets.splice(i,1); continue; }
+    if (collidesBuilding(b.x,b.y,4)) {
+      if (b.explosive) triggerExplosion(b.x, b.y, b.explosionRadius, b.owner, b.damage);
+      bullets.splice(i,1); continue;
+    }
+    if (b.life<=0||b.x<0||b.x>W||b.y<0||b.y>H) {
+      if (b.explosive) triggerExplosion(b.x, b.y, b.explosionRadius, b.owner, b.damage);
+      bullets.splice(i,1); continue;
+    }
     let hit=false;
     for (const p of players) {
       if (p===b.owner||p.hp<=0||p.hidden) continue;
       if (Math.hypot(b.x-p.x,b.y-p.y)<p.radius) {
-        p.hp-=BULLET_DMG;
-        spawnPopup(p.x,p.y-25,`-${BULLET_DMG}`);
-        playHit();
-        if (!p.isBot) playHurt(); // extra grunt for player getting hit
-        if (p.hp<=0 && b.owner===players[0]) {
-          players[0].kills++;
-          spawnPopup(p.x,p.y-50,'ELIMINATED','#ffcc00');
-          playEliminate();
+        if (b.explosive) {
+          triggerExplosion(b.x, b.y, b.explosionRadius, b.owner, b.damage);
+        } else {
+          p.hp -= b.damage;
+          spawnPopup(p.x, p.y-25, `-${b.damage}`);
+          playHit();
+          if (!p.isBot) playHurt();
+          if (p.hp<=0 && b.owner===players[0]) {
+            players[0].kills++;
+            playerPoints += POINTS_PER_KILL;
+            spawnPopup(p.x, p.y-55, `+${POINTS_PER_KILL} PTS`, '#ffd700');
+            spawnPopup(p.x, p.y-35, 'ELIMINATED', '#ffcc00');
+            playEliminate();
+          }
         }
         hit=true; break;
       }
@@ -957,6 +1322,7 @@ function update() {
     uiNoise.style.width=`${user.noise*100}%`;
     uiKillFill.style.width=`${Math.min(100,(user.kills/KILL_GOAL)*100)}%`;
     uiKillNum.textContent=`${user.kills} KILLS`;
+    document.getElementById('points-val').textContent = playerPoints;
 
     const lit=user.lit;
     const isVisible=lit>0.3||user.noise>0.4;
