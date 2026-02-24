@@ -89,7 +89,87 @@
     color:#334;letter-spacing:2px;line-height:1.8;
   }
   .key{color:#557;font-weight:bold;}
-</style>
+
+  /* ── Mobile Controls ─────────────────────────────── */
+  #mobile-controls{display:none;pointer-events:none;}
+  #joystick-zone{
+    position:absolute;bottom:30px;left:30px;
+    width:130px;height:130px;pointer-events:all;
+  }
+  #joystick-base{
+    width:130px;height:130px;border-radius:50%;
+    background:rgba(0,30,60,0.5);border:2px solid rgba(100,180,255,0.25);
+    position:relative;
+  }
+  #joystick-knob{
+    width:50px;height:50px;border-radius:50%;
+    background:rgba(100,200,255,0.35);border:2px solid rgba(100,200,255,0.6);
+    position:absolute;top:50%;left:50%;
+    transform:translate(-50%,-50%);
+    box-shadow:0 0 12px rgba(100,200,255,0.3);
+    transition:none;
+  }
+  #btn-area{
+    position:absolute;bottom:30px;right:20px;
+    display:flex;flex-direction:column;align-items:flex-end;gap:10px;
+    pointer-events:all;
+  }
+  #btn-shoot{
+    width:60px;height:60px;border-radius:50%;
+    background:rgba(255,60,60,0.25);border:2px solid rgba(255,80,80,0.6);
+    color:#ff8888;font-family:'Rajdhani',sans-serif;font-size:11px;font-weight:700;
+    letter-spacing:1px;display:flex;align-items:center;justify-content:center;
+    box-shadow:0 0 12px rgba(255,60,60,0.2);
+    -webkit-tap-highlight-color:transparent;user-select:none;
+  }
+  #btn-shoot:active{background:rgba(255,60,60,0.5);box-shadow:0 0 24px rgba(255,60,60,0.5);}
+  .mob-btn{
+    padding:6px 12px;border-radius:5px;
+    font-family:'Share Tech Mono',monospace;font-size:9px;letter-spacing:1px;
+    display:flex;align-items:center;justify-content:center;gap:4px;
+    -webkit-tap-highlight-color:transparent;user-select:none;
+  }
+  #btn-hide{
+    background:rgba(0,255,136,0.1);border:1px solid rgba(0,255,136,0.4);
+    color:#00ff88;
+  }
+  #btn-hide:active{background:rgba(0,255,136,0.3);}
+  #btn-stealth{
+    background:rgba(100,200,255,0.08);border:1px solid rgba(100,200,255,0.25);
+    color:#5599aa;
+  }
+  #btn-stealth.active-stealth{background:rgba(100,200,255,0.2);border-color:rgba(100,200,255,0.6);color:#aaddff;}
+  #btn-shop{
+    background:rgba(255,215,0,0.08);border:1px solid rgba(255,215,0,0.3);
+    color:#ffd700;
+  }
+  #btn-shop:active{background:rgba(255,215,0,0.2);}
+  #joystick-zone{
+    position:absolute;bottom:24px;left:24px;
+    width:100px;height:100px;pointer-events:all;
+  }
+  #joystick-base{
+    width:100px;height:100px;border-radius:50%;
+    background:rgba(0,30,60,0.5);border:2px solid rgba(100,180,255,0.25);
+    position:relative;
+  }
+  #joystick-knob{
+    width:38px;height:38px;border-radius:50%;
+    background:rgba(100,200,255,0.35);border:2px solid rgba(100,200,255,0.6);
+    position:absolute;top:50%;left:50%;
+    transform:translate(-50%,-50%);
+    box-shadow:0 0 10px rgba(100,200,255,0.3);
+  }
+  @media (max-width:768px){
+    #bottom-hud{bottom:140px !important;}
+    #hide-hint{bottom:150px !important;}
+    .bar-wrap{width:140px !important;}
+    #hud{top:10px;left:10px;gap:5px;}
+    .hud-label{font-size:8px !important;}
+    .hud-val{font-size:11px !important;}
+    #status-text{font-size:11px !important;}
+    #msg{font-size:44px !important;}
+  }</style>
 </head>
 <body>
 <canvas id="c"></canvas>
@@ -119,7 +199,7 @@
 
   <!-- Points & Weapon HUD (bottom centre) -->
   <div id="bottom-hud" style="
-    position:absolute;bottom:20px;left:50%;transform:translateX(-50%);
+    position:absolute;bottom:4px;left:50%;transform:translateX(-50%);
     display:flex;align-items:center;gap:20px;pointer-events:none;
     background:rgba(0,5,15,0.75);border:1px solid #1a3a5a;
     padding:10px 24px;border-radius:4px;">
@@ -166,6 +246,24 @@
     <div><span class="key">SHIFT</span> – SILENT WALK</div>
     <div><span class="key">TAB</span> – SHOP</div>
   </div>
+
+  <!-- Mobile Controls -->
+  <div id="mobile-controls">
+    <div id="joystick-zone">
+      <div id="joystick-base">
+        <div id="joystick-knob"></div>
+      </div>
+    </div>
+    <div id="btn-area">
+      <div id="btn-shoot" class="mob-btn">FIRE</div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <div id="btn-hide" class="mob-btn">📦 HIDE</div>
+        <div id="btn-stealth" class="mob-btn">👟 WALK</div>
+      </div>
+      <div id="btn-shop" class="mob-btn">◆ SHOP</div>
+    </div>
+  </div>
+
 </div>
 <div id="overlay">
   <div id="msg">ELIMINATED</div>
@@ -1364,10 +1462,191 @@ function draw() {
   players.forEach(p=>p.draw());
   drawDarkness();
   drawPopups();
+  drawMobileAim();
 
   update();
   requestAnimationFrame(draw);
 }
+
+// ── Mobile Touch Controls ─────────────────────────────────────────────────────
+const isMobile = () => ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+
+// Only show mobile controls on real touch devices
+if (isMobile()) {
+  document.getElementById('mobile-controls').style.display = 'block';
+  document.getElementById('controls').style.display = 'none';
+  document.getElementById('bottom-hud').style.bottom = '140px';
+}
+
+const joystick = { active: false, id: null, baseX: 0, baseY: 0, dx: 0, dy: 0 };
+const aimTouch = { active: false, id: null, lastX: 0, lastY: 0 };
+let mobileShoot = false;
+let mobileStealth = false;
+let shootInterval = null;
+
+const jZone  = document.getElementById('joystick-zone');
+const jBase  = document.getElementById('joystick-base');
+const jKnob  = document.getElementById('joystick-knob');
+const btnShoot   = document.getElementById('btn-shoot');
+const btnHide    = document.getElementById('btn-hide');
+const btnStealth = document.getElementById('btn-stealth');
+const btnShop    = document.getElementById('btn-shop');
+
+const JMAX = 40; // max knob travel px
+
+function updateJoystickKnob() {
+  const mag = Math.hypot(joystick.dx, joystick.dy);
+  const scale = Math.min(mag, JMAX) / Math.max(mag, 1);
+  const kx = joystick.dx * scale;
+  const ky = joystick.dy * scale;
+  jKnob.style.transform = `translate(calc(-50% + ${kx}px), calc(-50% + ${ky}px))`;
+}
+
+function resetJoystick() {
+  joystick.active = false; joystick.id = null; joystick.dx = 0; joystick.dy = 0;
+  jKnob.style.transform = 'translate(-50%, -50%)';
+  keys['w'] = keys['s'] = keys['a'] = keys['d'] = false;
+}
+
+// Joystick touch handlers
+jZone.addEventListener('touchstart', e => {
+  e.preventDefault();
+  ensureAudio();
+  const t = e.changedTouches[0];
+  const r = jBase.getBoundingClientRect();
+  joystick.active = true;
+  joystick.id = t.identifier;
+  joystick.baseX = r.left + r.width/2;
+  joystick.baseY = r.top + r.height/2;
+  joystick.dx = 0; joystick.dy = 0;
+}, { passive: false });
+
+jZone.addEventListener('touchmove', e => {
+  e.preventDefault();
+  for (const t of e.changedTouches) {
+    if (t.identifier !== joystick.id) continue;
+    joystick.dx = t.clientX - joystick.baseX;
+    joystick.dy = t.clientY - joystick.baseY;
+    const mag = Math.hypot(joystick.dx, joystick.dy);
+    // Update fake keys based on angle + deadzone
+    const dead = 10;
+    if (mag > dead) {
+      const ang = Math.atan2(joystick.dy, joystick.dx);
+      keys['w'] = joystick.dy < -dead;
+      keys['s'] = joystick.dy > dead;
+      keys['a'] = joystick.dx < -dead;
+      keys['d'] = joystick.dx > dead;
+    } else {
+      keys['w'] = keys['s'] = keys['a'] = keys['d'] = false;
+    }
+    updateJoystickKnob();
+  }
+}, { passive: false });
+
+jZone.addEventListener('touchend', e => {
+  e.preventDefault();
+  for (const t of e.changedTouches) {
+    if (t.identifier === joystick.id) resetJoystick();
+  }
+}, { passive: false });
+
+// Right-side aim: any touch NOT on a button or joystick = aim + auto fire
+canvas.addEventListener('touchstart', e => {
+  e.preventDefault();
+  ensureAudio();
+  for (const t of e.changedTouches) {
+    // Skip if it's in left quarter (joystick territory)
+    if (t.clientX < window.innerWidth * 0.45) continue;
+    if (!aimTouch.active) {
+      aimTouch.active = true;
+      aimTouch.id = t.identifier;
+      aimTouch.lastX = t.clientX;
+      aimTouch.lastY = t.clientY;
+      // Update mouse so player aims at touch point
+      mouse.x = t.clientX;
+      mouse.y = t.clientY;
+    }
+  }
+}, { passive: false });
+
+canvas.addEventListener('touchmove', e => {
+  e.preventDefault();
+  for (const t of e.changedTouches) {
+    if (t.identifier === aimTouch.id) {
+      aimTouch.lastX = t.clientX;
+      aimTouch.lastY = t.clientY;
+      mouse.x = t.clientX;
+      mouse.y = t.clientY;
+    }
+  }
+}, { passive: false });
+
+canvas.addEventListener('touchend', e => {
+  e.preventDefault();
+  for (const t of e.changedTouches) {
+    if (t.identifier === aimTouch.id) {
+      aimTouch.active = false; aimTouch.id = null;
+    }
+  }
+}, { passive: false });
+
+// FIRE button — hold to keep shooting
+function startShooting() {
+  if (gameActive && players[0]?.hp > 0 && !players[0].hidden && !shopOpen) {
+    players[0].shoot();
+  }
+  if (!shootInterval) {
+    shootInterval = setInterval(() => {
+      if (gameActive && players[0]?.hp > 0 && !players[0].hidden && !shopOpen) {
+        players[0].shoot();
+      }
+    }, 120);
+  }
+}
+function stopShooting() {
+  clearInterval(shootInterval); shootInterval = null;
+}
+
+btnShoot.addEventListener('touchstart', e => { e.preventDefault(); ensureAudio(); startShooting(); }, { passive: false });
+btnShoot.addEventListener('touchend',   e => { e.preventDefault(); stopShooting(); }, { passive: false });
+btnShoot.addEventListener('touchcancel',e => { e.preventDefault(); stopShooting(); }, { passive: false });
+
+// HIDE button
+btnHide.addEventListener('touchstart', e => {
+  e.preventDefault();
+  ensureAudio();
+  if (gameActive && players[0]?.hp > 0) players[0].tryHide();
+}, { passive: false });
+
+// STEALTH toggle
+btnStealth.addEventListener('touchstart', e => {
+  e.preventDefault();
+  mobileStealth = !mobileStealth;
+  keys['shift'] = mobileStealth;
+  btnStealth.classList.toggle('active-stealth', mobileStealth);
+}, { passive: false });
+
+// SHOP button
+btnShop.addEventListener('touchstart', e => {
+  e.preventDefault();
+  ensureAudio();
+  if (shopOpen) closeShop(); else if (gameActive) openShop();
+}, { passive: false });
+
+// Draw the on-screen aim indicator (crosshair on right-side touch)
+function drawMobileAim() {
+  if (!isMobile() || !aimTouch.active) return;
+  const x = aimTouch.lastX, y = aimTouch.lastY;
+  ctx.save();
+  ctx.strokeStyle = 'rgba(255,100,100,0.6)';
+  ctx.lineWidth = 1.5;
+  const r = 18;
+  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x-r-6,y); ctx.lineTo(x+r+6,y); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x,y-r-6); ctx.lineTo(x,y+r+6); ctx.stroke();
+  ctx.restore();
+}
+// ─────────────────────────────────────────────────────────────────────────────
 
 initGame();
 draw();
